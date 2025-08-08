@@ -1,6 +1,7 @@
+// ClassSetup.js
 import React, { useState } from 'react';
 import { Box, Typography, TextField, Button } from '@mui/material';
-import axios from 'axios';
+import { createClass } from '../services/api';
 
 const ClassSetup = ({ setView, teacherId }) => {
   const [name, setName] = useState('');
@@ -14,13 +15,7 @@ const ClassSetup = ({ setView, teacherId }) => {
       return;
     }
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No token found');
-      await axios.post(
-        '/api/classes',
-        { name, description, teacher_id: teacherId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await createClass({ name, description, teacher_id: teacherId });
       setSuccess('Class created successfully');
       setName('');
       setDescription('');

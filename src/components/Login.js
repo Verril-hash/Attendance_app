@@ -1,27 +1,16 @@
+// Login.js
 import React, { useState } from 'react';
 import {
-  TextField,
-  Button,
-  Typography,
-  Box,
-  Paper,
-  Container,
-  Alert,
-  CircularProgress,
-  IconButton,
-  InputAdornment
+  TextField, Button, Typography, Box, Paper, Container, Alert, CircularProgress, IconButton, InputAdornment,
 } from '@mui/material';
 import {
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
-  School as SchoolIcon,
-  LockOutlined as LockIcon,
-  EmailOutlined as EmailIcon
+  Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon, School as SchoolIcon,
+  LockOutlined as LockIcon, EmailOutlined as EmailIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
-import axios from 'axios';
+import { validateToken } from '../services/api';
 
 const MotionPaper = motion(Paper);
 const MotionButton = motion(Button);
@@ -70,15 +59,11 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
   const handleLogin = async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const token = await userCredential.user.getIdToken(true);
-      
-      const response = await axios.post('/api/auth/login', { email }, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      });
-
+      const response = await validateToken(email);
       localStorage.setItem('token', token);
       setTeacherId(response.data.teacher.id);
       setIsLoggedIn(true);
@@ -99,7 +84,6 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
         overflow: 'hidden'
       }}
     >
-      {/* Animated Background Elements */}
       <Box sx={{ position: 'absolute', width: '100%', height: '100%', overflow: 'hidden' }}>
         {[...Array(6)].map((_, i) => (
           <motion.div
@@ -120,96 +104,29 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
         ))}
       </Box>
 
-      <Container 
-        maxWidth="sm" 
-        sx={{ 
-          minHeight: '100vh', 
-          display: 'flex', 
-          alignItems: 'center',
-          position: 'relative',
-          zIndex: 1,
-          py: { xs: 2, sm: 4 }
-        }}
-      >
+      <Container maxWidth="xs" sx={{ py: 8, position: 'relative', zIndex: 1 }}>
         <MotionPaper
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          elevation={24}
+          elevation={6}
           sx={{
-            p: { xs: 3, sm: 5 },
-            borderRadius: 4,
-            backdropFilter: 'blur(20px)',
+            p: 4,
+            borderRadius: 3,
             background: 'rgba(255, 255, 255, 0.95)',
-            width: '100%',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.2)'
+            backdropFilter: 'blur(10px)'
           }}
         >
-          <MotionBox variants={itemVariants} textAlign="center" mb={4}>
-            <motion.div
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              transition={{ duration: 0.3 }}
-            >
-              <SchoolIcon 
-                sx={{ 
-                  fontSize: { xs: 60, sm: 80 }, 
-                  color: '#667eea', 
-                  mb: 2,
-                  filter: 'drop-shadow(0 4px 8px rgba(102, 126, 234, 0.3))'
-                }} 
-              />
-            </motion.div>
-            
-            <Typography 
-              variant="h3" 
-              component="h1" 
-              sx={{ 
-                fontWeight: 800,
-                fontSize: { xs: '2rem', sm: '3rem' },
-                background: 'linear-gradient(45deg, #667eea, #764ba2)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                mb: 1,
-                letterSpacing: '-0.02em'
-              }}
-            >
-              Welcome Back
-            </Typography>
-            <Typography 
-              variant="h6" 
-              color="text.secondary"
-              sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
-            >
-              Sign in to your teacher dashboard
+          <MotionBox variants={itemVariants} sx={{ textAlign: 'center', mb: 4 }}>
+            <SchoolIcon sx={{ fontSize: 60, color: '#667eea', mb: 2 }} />
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b' }}>
+              Teacher Portal
             </Typography>
           </MotionBox>
 
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Alert 
-                severity="error" 
-                sx={{ 
-                  mb: 3, 
-                  borderRadius: 2,
-                  '& .MuiAlert-icon': {
-                    fontSize: '1.5rem'
-                  }
-                }}
-              >
-                {error}
-              </Alert>
-            </motion.div>
-          )}
-
-          <MotionBox variants={itemVariants} component="form" noValidate>
+          <MotionBox variants={itemVariants}>
             <TextField
-              label="Email Address"
+              label="Email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -224,7 +141,7 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
                 ),
               }}
               sx={{
-                mb: 2,
+                mb: 4,
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 3,
                   transition: 'all 0.3s ease',
@@ -239,7 +156,7 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
                 }
               }}
             />
-            
+
             <TextField
               label="Password"
               type={showPassword ? 'text' : 'password'}
@@ -318,6 +235,12 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
               )}
             </MotionButton>
           </MotionBox>
+
+          {error && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="error">{error}</Alert>
+            </Box>
+          )}
         </MotionPaper>
       </Container>
     </Box>

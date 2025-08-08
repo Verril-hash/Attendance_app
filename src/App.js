@@ -1,6 +1,7 @@
+// App.js
 import React, { useState, useEffect } from 'react';
 import { Container } from '@mui/material';
-import axios from 'axios';
+import { validateToken } from './services/api';
 import { auth } from './firebase';
 import { getIdToken } from 'firebase/auth';
 import Login from './components/Login';
@@ -28,9 +29,7 @@ const App = () => {
       try {
         const freshToken = await getIdToken(auth.currentUser, true); // Force refresh
         localStorage.setItem('token', freshToken);
-        const response = await axios.post('/api/auth/login', { email: auth.currentUser.email }, {
-          headers: { Authorization: `Bearer ${freshToken}`, 'Content-Type': 'application/json' },
-        });
+        const response = await validateToken(auth.currentUser.email);
         console.log('Token validation response:', response.data);
         setTeacherId(response.data.teacher.id);
         setIsLoggedIn(true);
@@ -51,7 +50,7 @@ const App = () => {
       {view === 'dashboard' && isLoggedIn && <Dashboard setView={setView} setClassId={setClassId} />}
       {view === 'classDetails' && isLoggedIn && <ClassDetails classId={classId} setView={setView} />}
       {view === 'studentSetup' && isLoggedIn && <StudentSetup classId={classId} setView={setView} />}
-      {view === 'analytics' && isLoggedIn && classId && <Analytics classId={classId} setView={setView} />} {/* Added setView */}
+      {view === 'analytics' && isLoggedIn && classId && <Analytics classId={classId} setView={setView} />}
       {view === 'classSetup' && isLoggedIn && <ClassSetup setView={setView} teacherId={teacherId} />}
     </Container>
   );
