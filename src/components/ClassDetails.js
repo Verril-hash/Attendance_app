@@ -71,7 +71,6 @@ const ClassDetails = ({ classId, setView }) => {
         const response = await getStudents(classId);
         // Sort students by rollNo ascending (numeric or string)
         const sorted = [...response.data].sort((a, b) => {
-          // Try numeric sort, fallback to string
           const aNum = Number(a.rollNo), bNum = Number(b.rollNo);
           if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
           return String(a.rollNo).localeCompare(String(b.rollNo));
@@ -97,7 +96,6 @@ const ClassDetails = ({ classId, setView }) => {
     }
     try {
       const added = await addStudent(classId, { rollNo, name });
-      // Add the new student to the end of the list
       const newStudent = added.data || { id: Date.now(), rollNo, name }; // fallback if API doesn't return student
       setStudents(prev => [...prev, newStudent]);
       setAttendance(prev => ({ ...prev, [newStudent.id]: true }));
@@ -143,6 +141,8 @@ const ClassDetails = ({ classId, setView }) => {
   };
 
   const handleDownloadPDF = () => {
+    setSuccess('Generating PDF...');
+    const element = document.createElement('div');
     const today = new Date();
     const dateStr = today.toLocaleDateString();
     const dayStr = today.toLocaleDateString('en-US', { weekday: 'long' });
@@ -150,82 +150,62 @@ const ClassDetails = ({ classId, setView }) => {
     const absent = students.length - present;
     const rate = students.length ? ((present / students.length) * 100).toFixed(1) : 0;
 
-    const printWindow = window.open('', '_blank');
-    
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Attendance Report</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }
-          h1 { color: #667eea; text-align: center; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background: #667eea; color: white; }
-          .present { background: #e8f5e8; color: #2e7d32; font-weight: bold; }
-          .absent { background: #ffebee; color: #d32f2f; font-weight: bold; }
-          .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <h1>Attendance Report</h1>
-        <p><strong>Date:</strong> ${dateStr}</p>
-        <p><strong>Day:</strong> ${dayStr}</p>
-        <p><strong>Total Students:</strong> ${students.length}</p>
-        <p><strong>Present:</strong> ${present}</p>
-        <p><strong>Absent:</strong> ${absent}</p>
-        <p><strong>Attendance Rate:</strong> ${rate}%</p>
-        
-        <table>
-          <thead>
-            <tr>
-              <th>Roll No</th>
-              <th>Name</th>
-              <th>Status</th>
+    element.innerHTML = `
+      <h1 style="font-size: 20px; color: #667eea; text-align: center; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Attendance Report</h1>
+      <p><strong>Date:</strong> ${dateStr}</p>
+      <p><strong>Day:</strong> ${dayStr}</p>
+      <p><strong>Total Students:</strong> ${students.length}</p>
+      <p><strong>Present:</strong> ${present}</p>
+      <p><strong>Absent:</strong> ${absent}</p>
+      <p><strong>Attendance Rate:</strong> ${rate}%</p>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+          <tr style="background: #667eea; color: white;">
+            <th style="padding: 8px; text-align: left;">Roll No</th>
+            <th style="padding: 8px; text-align: left;">Name</th>
+            <th style="padding: 8px; text-align: left;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${students.map((student) => `
+            <tr style="background: #ffffff;">
+              <td style="padding: 8px; border: 1px solid #ddd;">${student.rollNo}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${student.name}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; ${attendance[student.id] ? 'background: #e8f5e8; color: #2e7d32;' : 'background: #ffebee; color: #d32f2f;'}">
+                ${attendance[student.id] ? 'Present' : 'Absent'}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            ${students.map(student => `
-              <tr>
-                <td>${student.rollNo}</td>
-                <td>${student.name}</td>
-                <td class="${attendance[student.id] ? 'present' : 'absent'}">
-                  ${attendance[student.id] ? 'Present' : 'Absent'}
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        
-        <div class="footer">Generated on ${today.toLocaleString()}</div>
-        
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-        <script>
-          window.onload = function() {
-            const options = {
-              margin: 10,
-              filename: 'attendance-report-${today.toISOString().slice(0, 10)}.pdf',
-              image: { type: 'jpeg', quality: 0.98 },
-              html2canvas: { scale: 2 },
-              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-            
-            html2pdf().set(options).from(document.body).save().then(() => {
-              window.close();
-            });
-          };
-        </script>
-      </body>
-      </html>
+          `).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
+        Generated on ${today.toLocaleString()}
+      </div>
     `;
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    setSuccess('Generating PDF...');
-    setTimeout(() => setSuccess(null), 3000);
+    const options = {
+      margin: 10,
+      filename: `attendance-report-${today.toISOString().slice(0, 10)}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(options).from(element).toPdf().get('pdf').then((pdf) => {
+      const blob = pdf.output('blob');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = options.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+      setSuccess('PDF downloaded successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    }).catch((error) => {
+      setError('Failed to generate PDF: ' + error.message);
+      setTimeout(() => setError(null), 3000);
+    });
   };
 
   const presentCount = Object.values(attendance).filter(Boolean).length;
@@ -355,7 +335,7 @@ const ClassDetails = ({ classId, setView }) => {
                       {loading ? <LinearProgress sx={{ width: 50, mx: 'auto' }} /> : card.value}
                     </Typography>
                     <Typography variant="body1" sx={{ opacity: 0.9, fontWeight: 500, fontSize: { xs: '0.75rem', sm: '1rem' } }}>
-                      {card.label}
+                      ${card.label}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -434,7 +414,7 @@ const ClassDetails = ({ classId, setView }) => {
                 }}
               >
                 <PersonIcon sx={{ mr: { xs: 1, sm: 2 } }} />
-                Student Attendance ({students.length} students)
+                Student Attendance (${students.length} students)
               </Typography>
             </Box>
 
@@ -486,7 +466,7 @@ const ClassDetails = ({ classId, setView }) => {
                             fontWeight: 600
                           }}
                         >
-                          {student.name.charAt(0).toUpperCase()}
+                          ${student.name.charAt(0).toUpperCase()}
                         </Avatar>
                         
                         <Box sx={{ flex: 1 }}>
@@ -527,7 +507,7 @@ const ClassDetails = ({ classId, setView }) => {
                               fontSize: { xs: '0.625rem', sm: '0.9rem' }
                             }}
                           >
-                            {attendance[student.id] ? '✓ Present' : '○ Absent'}
+                            ${attendance[student.id] ? '✓ Present' : '○ Absent'}
                           </Typography>
                         </Box>
                         {/* Delete Student Button removed */}
