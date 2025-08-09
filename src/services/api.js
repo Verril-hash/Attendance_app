@@ -15,10 +15,16 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log('Interceptor Token:', token); // Debug
   return config;
 }, (error) => Promise.reject(error));
 
-export const validateToken = (email) => api.post('/api/auth/login', { email });
+export const validateToken = (email, token) => {
+  const config = {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  };
+  return api.post('/api/auth/login', { email }, config);
+};
 export const getClasses = () => api.get('/api/classes');
 export const createClass = (data) => api.post('/api/classes', data);
 export const getStudents = (classId) => api.get(`/api/students/${classId}`);
@@ -26,5 +32,10 @@ export const addStudent = (classId, data) => api.post(`/api/students/${classId}`
 export const saveAttendance = (classId, data) => api.post(`/api/attendance/${classId}`, data);
 export const deleteClass = (classId) => api.delete(`/api/classes/${classId}`);
 export const getAnalytics = (classId) => api.get(`/api/analytics/${classId}`);
+export const deleteStudent = async (classId, studentId) => {
+  return axios.delete(`/api/classes/${classId}/students/${studentId}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+  });
+};
 
 export default api;

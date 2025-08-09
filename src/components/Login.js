@@ -63,8 +63,11 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const token = await userCredential.user.getIdToken(true);
-      const response = await validateToken(email);
-      localStorage.setItem('token', token);
+      console.log('Generated Token:', token); // Debug
+      localStorage.setItem('token', token); // Set token first
+
+      // Manually set the token for this request
+      const response = await validateToken(email, token); // Pass token explicitly
       setTeacherId(response.data.teacher.id);
       setIsLoggedIn(true);
       setView('dashboard');
@@ -92,47 +95,47 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
             animate="animate"
             style={{
               position: 'absolute',
-              width: `${40 + i * 20}px`,
-              height: `${40 + i * 20}px`,
+              width: '20px',
+              height: '20px',
+              background: 'rgba(255, 255, 255, 0.2)',
               borderRadius: '50%',
-              background: `rgba(255, 255, 255, ${0.1 - i * 0.01})`,
-              left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
-              animationDelay: `${i * 0.5}s`
+              left: `${Math.random() * 100}%`
             }}
           />
         ))}
       </Box>
-
-      <Container maxWidth="xs" sx={{ py: 8, position: 'relative', zIndex: 1 }}>
+      <Container maxWidth="xs">
         <MotionPaper
           variants={containerVariants}
           initial="hidden"
           animate="visible"
           elevation={6}
           sx={{
+            mt: 8,
             p: 4,
             borderRadius: 3,
             background: 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(10px)'
           }}
         >
-          <MotionBox variants={itemVariants} sx={{ textAlign: 'center', mb: 4 }}>
-            <SchoolIcon sx={{ fontSize: 60, color: '#667eea', mb: 2 }} />
-            <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b' }}>
-              Teacher Portal
-            </Typography>
-          </MotionBox>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
+            <motion.div variants={itemVariants}>
+              <SchoolIcon sx={{ fontSize: 60, color: '#667eea' }} />
+            </motion.div>
+          </Box>
+
+          <Typography variant="h5" align="center" gutterBottom sx={{ color: '#333', fontWeight: 700 }}>
+            Teacher Login
+          </Typography>
 
           <MotionBox variants={itemVariants}>
             <TextField
               label="Email"
-              type="email"
+              variant="outlined"
+              fullWidth
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              fullWidth
-              margin="normal"
-              variant="outlined"
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -156,15 +159,16 @@ const Login = ({ setIsLoggedIn, setView, setTeacherId }) => {
                 }
               }}
             />
+          </MotionBox>
 
+          <MotionBox variants={itemVariants}>
             <TextField
               label="Password"
+              variant="outlined"
+              fullWidth
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              fullWidth
-              margin="normal"
-              variant="outlined"
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">

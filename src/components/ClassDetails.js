@@ -1,18 +1,43 @@
-// ClassDetails.js
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Typography, TextField, Button, List, ListItem, ListItemText, Checkbox, Card, CardContent,
-  Grid, Container, Chip, IconButton, Alert, Fab, Dialog, DialogTitle, DialogContent, DialogActions,
-  Avatar, Divider, LinearProgress,
+  Box,
+  Typography,
+  TextField,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  Checkbox,
+  Card,
+  CardContent,
+  Grid,
+  Container,
+  Chip,
+  IconButton,
+  Alert,
+  Fab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Avatar,
+  Divider,
+  LinearProgress
 } from '@mui/material';
 import {
-  Add as AddIcon, Download as DownloadIcon, Save as SaveIcon, Person as PersonIcon,
-  CheckCircle as CheckCircleIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon,
-  School as SchoolIcon, Today as TodayIcon,
+  Add as AddIcon,
+  Download as DownloadIcon,
+  Save as SaveIcon,
+  Person as PersonIcon,
+  CheckCircle as CheckCircleIcon,
+  ArrowBack as ArrowBackIcon,
+  Delete as DeleteIcon,
+  School as SchoolIcon,
+  Today as TodayIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import html2pdf from 'html2pdf.js';
-import { getStudents, addStudent, saveAttendance, deleteClass } from '../services/api';
+import { getStudents, addStudent, saveAttendance, deleteClass, deleteStudent } from '../services/api'; // Adjust path
 
 const MotionCard = motion(Card);
 const MotionListItem = motion(ListItem);
@@ -20,7 +45,6 @@ const MotionBox = motion(Box);
 const MotionFab = motion(Fab);
 
 const ClassDetails = ({ classId, setView }) => {
-  /* ------------------------------ state ------------------------------ */
   const [students, setStudents] = useState([]);
   const [rollNo, setRollNo] = useState('');
   const [name, setName] = useState('');
@@ -31,26 +55,31 @@ const ClassDetails = ({ classId, setView }) => {
   const [openDelete, setOpenDelete] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  /* --------------------------- animations ---------------------------- */
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.1 } },
+    visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.1 } }
   };
-
+  
   const listItemVariants = {
     hidden: { opacity: 0, x: -30 },
-    visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 100 } },
+    visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 100 } }
   };
 
-  /* --------------------------- data fetch ---------------------------- */
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await getStudents(classId);
-        const sortedStudents = [...response.data].sort((a, b) => a.rollNo - b.rollNo);
-        setStudents(sortedStudents);
+        // Sort students by rollNo ascending (numeric or string)
+        const sorted = [...response.data].sort((a, b) => {
+          // Try numeric sort, fallback to string
+          const aNum = Number(a.rollNo), bNum = Number(b.rollNo);
+          if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+          return String(a.rollNo).localeCompare(String(b.rollNo));
+        });
+        setStudents(sorted);
+        // Set all students to present by default
         setAttendance(
-          sortedStudents.reduce((acc, s) => ({ ...acc, [s.id]: false }), {})
+          sorted.reduce((acc, s) => ({ ...acc, [s.id]: true }), {})
         );
       } catch (err) {
         setError(err.response?.data?.error || err.message || 'Failed to fetch details');
@@ -61,29 +90,18 @@ const ClassDetails = ({ classId, setView }) => {
     fetchData();
   }, [classId]);
 
-  /* ------------------------ handlers / helpers ----------------------- */
   const handleAddStudent = async () => {
     if (!rollNo || !name) {
       setError('Please fill in all fields');
       return;
     }
-    const existingRollNos = students.map(s => s.rollNo);
-    if (existingRollNos.includes(parseInt(rollNo))) {
-      setError('Roll number already exists');
-      return;
-    }
-    if (existingRollNos.length > 0 && parseInt(rollNo) !== Math.max(...existingRollNos) + 1) {
-      setError('Roll number must be the next sequential number');
-      return;
-    }
     try {
-      await addStudent(classId, { rollNo: parseInt(rollNo), name });
-      const refetch = await getStudents(classId);
-      const sortedStudents = [...refetch.data].sort((a, b) => a.rollNo - b.rollNo);
-      setStudents(sortedStudents);
-      setRollNo('');
-      setName('');
-      setOpenAdd(false);
+      const added = await addStudent(classId, { rollNo, name });
+      // Add the new student to the end of the list
+      const newStudent = added.data || { id: Date.now(), rollNo, name }; // fallback if API doesn't return student
+      setStudents(prev => [...prev, newStudent]);
+      setAttendance(prev => ({ ...prev, [newStudent.id]: true }));
+      setRollNo(''); setName(''); setOpenAdd(false);
       setSuccess('Student added successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -91,16 +109,17 @@ const ClassDetails = ({ classId, setView }) => {
     }
   };
 
-  const handleAttendanceChange = (studentId) => (event) => {
-    setAttendance({ ...attendance, [studentId]: event.target.checked });
-  };
+  const handleAttendanceChange = (id) => (e) =>
+    setAttendance({ ...attendance, [id]: e.target.checked });
 
   const handleSaveAttendance = async () => {
     try {
-      const attendanceData = Object.entries(attendance)
-        .filter(([, value]) => value)
-        .map(([studentId]) => studentId);
-      await saveAttendance(classId, { studentIds: attendanceData });
+      const date = new Date().toISOString().split('T')[0];
+      const list = Object.entries(attendance)
+        .filter(([_, present]) => present)
+        .map(([id]) => id);
+
+      await saveAttendance(classId, { date, attendance: list });
       setSuccess('Attendance saved successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -111,143 +130,518 @@ const ClassDetails = ({ classId, setView }) => {
   const handleDeleteClass = async () => {
     try {
       await deleteClass(classId);
-      setOpenDelete(false);
-      setView('dashboard');
       setSuccess('Class deleted successfully');
-      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => {
+        setSuccess(null);
+        setView('dashboard');
+      }, 3000);
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to delete class');
+    } finally {
+      setOpenDelete(false);
     }
   };
 
   const handleDownloadPDF = () => {
-    const element = document.getElementById('class-details-card');
-    html2pdf().from(element).save(`class_${classId}_details.pdf`);
+    const today = new Date();
+    const dateStr = today.toLocaleDateString();
+    const dayStr = today.toLocaleDateString('en-US', { weekday: 'long' });
+    const present = Object.values(attendance).filter(Boolean).length;
+    const absent = students.length - present;
+    const rate = students.length ? ((present / students.length) * 100).toFixed(1) : 0;
+
+    const printWindow = window.open('', '_blank');
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Attendance Report</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }
+          h1 { color: #667eea; text-align: center; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background: #667eea; color: white; }
+          .present { background: #e8f5e8; color: #2e7d32; font-weight: bold; }
+          .absent { background: #ffebee; color: #d32f2f; font-weight: bold; }
+          .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <h1>Attendance Report</h1>
+        <p><strong>Date:</strong> ${dateStr}</p>
+        <p><strong>Day:</strong> ${dayStr}</p>
+        <p><strong>Total Students:</strong> ${students.length}</p>
+        <p><strong>Present:</strong> ${present}</p>
+        <p><strong>Absent:</strong> ${absent}</p>
+        <p><strong>Attendance Rate:</strong> ${rate}%</p>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Roll No</th>
+              <th>Name</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${students.map(student => `
+              <tr>
+                <td>${student.rollNo}</td>
+                <td>${student.name}</td>
+                <td class="${attendance[student.id] ? 'present' : 'absent'}">
+                  ${attendance[student.id] ? 'Present' : 'Absent'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="footer">Generated on ${today.toLocaleString()}</div>
+        
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+        <script>
+          window.onload = function() {
+            const options = {
+              margin: 10,
+              filename: 'attendance-report-${today.toISOString().slice(0, 10)}.pdf',
+              image: { type: 'jpeg', quality: 0.98 },
+              html2canvas: { scale: 2 },
+              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            
+            html2pdf().set(options).from(document.body).save().then(() => {
+              window.close();
+            });
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setSuccess('Generating PDF...');
+    setTimeout(() => setSuccess(null), 3000);
   };
 
-  /* ----------------------------- UI --------------------------------- */
+  const presentCount = Object.values(attendance).filter(Boolean).length;
+  const absentCount = students.length - presentCount;
+  const attendanceRate = students.length ? ((presentCount / students.length) * 100).toFixed(1) : 0;
+
   return (
-    <Box sx={{ py: 4, minHeight: '100vh' }}>
-      <Container>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
-          <IconButton onClick={() => setView('dashboard')} sx={{ mr: 2 }}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography variant="h4" component="h1">
-            Class Details
-          </Typography>
-        </Box>
-
-        {loading && <LinearProgress />}
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-
-        <MotionCard
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          id="class-details-card"
+    <Box sx={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+      pb: { xs: 2, sm: 4 }
+    }}>
+      <Container maxWidth="lg" sx={{ pt: { xs: 1, sm: 2, md: 4 } }}>
+        {/* Header */}
+        <MotionBox
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          sx={{ mb: { xs: 2, sm: 4 } }}
         >
-          <CardContent>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <SchoolIcon color="primary" sx={{ mr: 1 }} />
-                  <Typography variant="h6">Class ID: {classId}</Typography>
-                </Box>
-                <Typography variant="body1" color="text.secondary" paragraph>
-                  Manage student details, record attendance, and generate reports for this class.
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6} sx={{ textAlign: { xs: 'left', md: 'right' } }}>
-                <Chip
-                  icon={<TodayIcon />}
-                  label={`Last Updated: ${new Date().toLocaleDateString()}`}
-                  color="primary"
-                  variant="outlined"
-                />
-              </Grid>
-            </Grid>
-
-            <Divider sx={{ my: 3 }} />
-
-            <Typography variant="h6" gutterBottom>
-              Students
-            </Typography>
-            <List>
-              <AnimatePresence>
-                {students.map((student) => (
-                  <MotionListItem
-                    key={student.id}
-                    variants={listItemVariants}
-                    initial="hidden"
-                    animate="visible"
-                    exit="hidden"
-                  >
-                    <ListItemText
-                      primary={`${student.rollNo}. ${student.name}`}
-                      secondary={
-                        <Checkbox
-                          checked={attendance[student.id] || false}
-                          onChange={handleAttendanceChange(student.id)}
-                        />
-                      }
-                    />
-                  </MotionListItem>
-                ))}
-              </AnimatePresence>
-            </List>
-
-            <Box sx={{ mt: 3, textAlign: 'right' }}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleSaveAttendance}
-                startIcon={<SaveIcon />}
-              >
-                Save Attendance
-              </Button>
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={handleDownloadPDF}
-                startIcon={<DownloadIcon />}
-                sx={{ ml: 2 }}
-              >
-                Download PDF
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                onClick={() => setOpenDelete(true)}
-                startIcon={<DeleteIcon />}
-                sx={{ ml: 2 }}
-              >
-                Delete Class
-              </Button>
+          <Card 
+            sx={{ 
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              borderRadius: { xs: 2, sm: 4 },
+              overflow: 'hidden',
+              position: 'relative',
+              boxShadow: { xs: 'none', sm: '0 4px 12px rgba(0,0,0,0.1)' }
+            }}
+          >
+            <Box sx={{ position: 'absolute', top: 0, right: 0, opacity: 0.1 }}>
+              <SchoolIcon sx={{ fontSize: { xs: 80, sm: 120 } }} />
             </Box>
+            <CardContent sx={{ p: { xs: 2, sm: 3, md: 4 }, position: 'relative', zIndex: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 1, sm: 3 } }}>
+                <IconButton 
+                  onClick={() => setView('dashboard')}
+                  sx={{ 
+                    mr: { xs: 1, sm: 2 }, 
+                    color: 'white',
+                    background: 'rgba(255,255,255,0.1)',
+                    '&:hover': { background: 'rgba(255,255,255,0.2)' },
+                    fontSize: { xs: '1rem', sm: '1.25rem' }
+                  }}
+                >
+                  <ArrowBackIcon />
+                </IconButton>
+                <Box>
+                  <Typography 
+                    variant="h3" 
+                    component="h1" 
+                    sx={{ 
+                      fontWeight: 700,
+                      fontSize: { xs: '1.5rem', sm: '1.8rem', md: '2.5rem' },
+                      lineHeight: 1.2
+                    }}
+                  >
+                    Class Details
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mt: { xs: 0.5, sm: 1 } }}>
+                    <TodayIcon sx={{ mr: { xs: 0.5, sm: 1 }, fontSize: { xs: 16, sm: 20 } }} />
+                    <Typography variant="body1" sx={{ opacity: 0.9, fontSize: { xs: '0.75rem', sm: '1rem' } }}>
+                      {new Date().toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </MotionBox>
+
+        {/* Stats Cards */}
+        <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: { xs: 2, sm: 4 } }}>
+          {[
+            { 
+              label: 'Total Students', 
+              value: students.length, 
+              color: '#0277bd', 
+              bg: 'linear-gradient(135deg, #03a9f4 0%, #0277bd 100%)',
+              icon: <PersonIcon sx={{ fontSize: { xs: 24, sm: 32 } }} />
+            },
+            { 
+              label: 'Present Today', 
+              value: presentCount, 
+              color: '#2e7d32', 
+              bg: 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
+              icon: <CheckCircleIcon sx={{ fontSize: { xs: 24, sm: 32 } }} />
+            },
+            { 
+              label: 'Attendance Rate', 
+              value: `${attendanceRate}%`, 
+              color: '#f57c00', 
+              bg: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+              icon: <TodayIcon sx={{ fontSize: { xs: 24, sm: 32 } }} />
+            }
+          ].map((card, index) => (
+            <Grid item xs={12} sm={6} md={4} key={card.label}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+              >
+                <Card 
+                  sx={{ 
+                    borderRadius: { xs: 2, sm: 3 },
+                    background: card.bg,
+                    color: 'white',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    height: '100%'
+                  }}
+                >
+                  <CardContent sx={{ textAlign: 'center', py: { xs: 2, sm: 3 }, position: 'relative', zIndex: 1 }}>
+                    <Box sx={{ mb: { xs: 1, sm: 2 } }}>{card.icon}</Box>
+                    <Typography
+                      variant="h3"
+                      sx={{ 
+                        fontWeight: 700, 
+                        fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' }
+                      }}
+                    >
+                      {loading ? <LinearProgress sx={{ width: 50, mx: 'auto' }} /> : card.value}
+                    </Typography>
+                    <Typography variant="body1" sx={{ opacity: 0.9, fontWeight: 500, fontSize: { xs: '0.75rem', sm: '1rem' } }}>
+                      {card.label}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Alerts */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Alert 
+                severity="error" 
+                sx={{ 
+                  mb: { xs: 1, sm: 3 }, 
+                  borderRadius: { xs: 2, sm: 3 },
+                  '& .MuiAlert-icon': { fontSize: { xs: '1rem', sm: '1.5rem' } }
+                }}
+              >
+                {error}
+              </Alert>
+            </motion.div>
+          )}
+
+          {success && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Alert 
+                severity="success" 
+                sx={{ 
+                  mb: { xs: 1, sm: 3 }, 
+                  borderRadius: { xs: 2, sm: 3 },
+                  '& .MuiAlert-icon': { fontSize: { xs: '1rem', sm: '1.5rem' } }
+                }}
+              >
+                {success}
+              </Alert>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Students List */}
+        <MotionCard
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          sx={{ 
+            borderRadius: { xs: 2, sm: 4 }, 
+            overflow: 'hidden', 
+            boxShadow: { xs: '0 2px 6px rgba(0,0,0,0.1)', sm: '0 8px 32px rgba(0,0,0,0.1)' }
+          }}
+        >
+          <CardContent sx={{ p: 0 }}>
+            <Box sx={{ 
+              p: { xs: 2, sm: 3, md: 4 }, 
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white'
+            }}>
+              <Typography 
+                variant="h5" 
+                sx={{ 
+                  fontWeight: 600, 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem' }
+                }}
+              >
+                <PersonIcon sx={{ mr: { xs: 1, sm: 2 } }} />
+                Student Attendance ({students.length} students)
+              </Typography>
+            </Box>
+
+            {students.length === 0 ? (
+              <Box sx={{ p: { xs: 2, sm: 4, md: 6 }, textAlign: 'center' }}>
+                <SchoolIcon sx={{ fontSize: { xs: 40, sm: 80 }, color: '#e0e7ff', mb: { xs: 1, sm: 2 } }} />
+                <Typography variant="h6" color="text.secondary" sx={{ fontSize: { xs: '0.875rem', sm: '1rem', md: '1.25rem' }, mb: { xs: 0.5, sm: 1 } }}>
+                  No students found
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' } }}>
+                  Add students to start taking attendance
+                </Typography>
+              </Box>
+            ) : (
+              <motion.div variants={containerVariants} initial="hidden" animate="visible">
+                <List sx={{ p: 0 }}>
+                  {students.map((student, index) => (
+                    <MotionListItem
+                      key={student.id}
+                      variants={listItemVariants}
+                      sx={{
+                        borderBottom: index < students.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        '&:hover': { bgcolor: '#f8fafc' },
+                        py: { xs: 1, sm: 2 },
+                        px: { xs: 2, sm: 3, md: 4 }
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                        <motion.div whileTap={{ scale: 0.9 }}>
+                          <Checkbox
+                            checked={attendance[student.id] || false}
+                            onChange={handleAttendanceChange(student.id)}
+                            size="small"
+                            sx={{
+                              mr: { xs: 1, sm: 2 },
+                              '&.Mui-checked': { color: '#22c55e' },
+                              padding: { xs: 0, sm: '8px' }
+                            }}
+                          />
+                        </motion.div>
+                        
+                        <Avatar 
+                          sx={{ 
+                            mr: { xs: 1, sm: 3 }, 
+                            width: { xs: 30, sm: 40, md: 48 }, 
+                            height: { xs: 30, sm: 40, md: 48 },
+                            bgcolor: attendance[student.id] ? '#22c55e' : '#64748b',
+                            fontSize: { xs: '0.75rem', sm: '1rem', md: '1.25rem' },
+                            fontWeight: 600
+                          }}
+                        >
+                          {student.name.charAt(0).toUpperCase()}
+                        </Avatar>
+                        
+                        <Box sx={{ flex: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 }, mb: { xs: 0.5, sm: 1 } }}>
+                            <Typography 
+                              variant="h6" 
+                              sx={{ 
+                                fontWeight: 600,
+                                fontSize: { xs: '0.875rem', sm: '1.1rem', md: '1.25rem' }
+                              }}
+                            >
+                              {student.name}
+                            </Typography>
+                            <Chip 
+                              label={`Roll: ${student.rollNo}`} 
+                              size="small"
+                              variant="outlined"
+                              sx={{ 
+                                borderColor: '#e2e8f0',
+                                fontSize: { xs: '0.625rem', sm: '0.75rem' }
+                              }}
+                            />
+                            {attendance[student.id] && (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ type: 'spring', stiffness: 200 }}
+                              >
+                                <CheckCircleIcon sx={{ color: '#22c55e', fontSize: { xs: 16, sm: 24 } }} />
+                              </motion.div>
+                            )}
+                          </Box>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              color: attendance[student.id] ? '#22c55e' : '#64748b',
+                              fontWeight: 500,
+                              fontSize: { xs: '0.625rem', sm: '0.9rem' }
+                            }}
+                          >
+                            {attendance[student.id] ? '✓ Present' : '○ Absent'}
+                          </Typography>
+                        </Box>
+                        {/* Delete Student Button removed */}
+                      </Box>
+                    </MotionListItem>
+                  ))}
+                </List>
+              </motion.div>
+            )}
           </CardContent>
         </MotionCard>
 
+        {/* Floating Action Buttons */}
+        <Box sx={{ 
+          position: 'fixed', 
+          bottom: { xs: 8, sm: 16, md: 24 }, 
+          right: { xs: 8, sm: 16, md: 24 }, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: { xs: 1, sm: 2 }
+        }}>
+          {/* Download PDF */}
+          <MotionFab
+            initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+            onClick={handleDownloadPDF}
+            sx={{
+              background: 'linear-gradient(45deg,#ff6b6b,#ee5a24)', 
+              color: 'white',
+              width: { xs: 40, sm: 56, md: 64 }, height: { xs: 40, sm: 56, md: 64 },
+              '&:hover': { 
+                background: 'linear-gradient(45deg,#ff5252,#e53e3e)',
+                boxShadow: '0 4px 12px rgba(255, 107, 107, 0.4)'
+              }
+            }}
+          >
+            <DownloadIcon sx={{ fontSize: { xs: 16, sm: 24, md: 28 } }} />
+          </MotionFab>
+
+          {/* Save Attendance */}
+          <MotionFab
+            initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.3 }} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+            onClick={handleSaveAttendance}
+            sx={{
+              background: 'linear-gradient(45deg,#22c55e,#16a34a)', 
+              color: 'white',
+              width: { xs: 40, sm: 56, md: 64 }, height: { xs: 40, sm: 56, md: 64 },
+              '&:hover': { 
+                background: 'linear-gradient(45deg,#16a34a,#15803d)',
+                boxShadow: '0 4px 12px rgba(34, 197, 94, 0.4)'
+              }
+            }}
+          >
+            <SaveIcon sx={{ fontSize: { xs: 16, sm: 24, md: 28 } }} />
+          </MotionFab>
+
+          {/* Add Student */}
+          <MotionFab
+            initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.4 }} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9}}
+            onClick={() => setOpenAdd(true)}
+            sx={{
+              background: 'linear-gradient(45deg,#667eea,#764ba2)', 
+              color: 'white',
+              width: { xs: 40, sm: 56, md: 64 }, height: { xs: 40, sm: 56, md: 64 },
+              '&:hover': { 
+                background: 'linear-gradient(45deg,#5a6fd8,#6a42a0)',
+                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
+              }
+            }}
+          >
+            <AddIcon sx={{ fontSize: { xs: 16, sm: 24, md: 28 } }} />
+          </MotionFab>
+
+          {/* Delete Class FAB */}
+          <MotionFab
+            initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5 }} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+            onClick={() => setOpenDelete(true)}
+            sx={{
+              background: 'linear-gradient(45deg,#ef4444,#dc2626)', 
+              color: 'white',
+              width: { xs: 40, sm: 56, md: 64 }, height: { xs: 40, sm: 56, md: 64 },
+              '&:hover': { 
+                background: 'linear-gradient(45deg,#dc2626,#b91c1c)',
+                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
+              }
+            }}
+          >
+            <DeleteIcon sx={{ fontSize: { xs: 16, sm: 24, md: 28 } }} />
+          </MotionFab>
+        </Box>
+
         {/* Add Student Dialog */}
-        <Dialog
-          open={openAdd}
+        <Dialog 
+          open={openAdd} 
           onClose={() => setOpenAdd(false)}
-          maxWidth="xs"
+          maxWidth="sm"
           fullWidth
+          PaperProps={{ sx: { borderRadius: { xs: 2, sm: 4 } } }}
         >
-          <DialogTitle sx={{
-            fontSize: { xs: '1.25rem', sm: '1.5rem' },
+          <DialogTitle sx={{ 
+            fontSize: { xs: '1.25rem', sm: '1.5rem' }, 
             fontWeight: 600,
             background: 'linear-gradient(45deg, #667eea, #764ba2)',
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            WebkitTextFillColor: 'transparent'
           }}>
             Add New Student
           </DialogTitle>
           
-          <DialogContent sx={{ pt: 3 }}>
+          <DialogContent sx={{ pt: { xs: 2, sm: 3 } }}>
             <TextField
               label="Roll Number"
               value={rollNo}
@@ -255,7 +649,7 @@ const ClassDetails = ({ classId, setView }) => {
               fullWidth
               margin="normal"
               variant="outlined"
-              sx={{ mb: 2 }}
+              sx={{ mb: { xs: 1, sm: 2 }, '& .MuiInputBase-input': { fontSize: { xs: '0.75rem', sm: '1rem' } } }}
             />
             
             <TextField
@@ -265,13 +659,14 @@ const ClassDetails = ({ classId, setView }) => {
               fullWidth
               margin="normal"
               variant="outlined"
+              sx={{ '& .MuiInputBase-input': { fontSize: { xs: '0.75rem', sm: '1rem' } } }}
             />
           </DialogContent>
           
-          <DialogActions sx={{ p: 3 }}>
+          <DialogActions sx={{ p: { xs: 2, sm: 3 } }}>
             <Button 
               onClick={() => setOpenAdd(false)}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: 'none', fontSize: { xs: '0.75rem', sm: '1rem' } }}
             >
               Cancel
             </Button>
@@ -280,12 +675,11 @@ const ClassDetails = ({ classId, setView }) => {
               variant="contained"
               sx={{
                 textTransform: 'none',
-                borderRadius: 2,
-                px: 3,
+                borderRadius: { xs: 1, sm: 2 },
+                px: { xs: 2, sm: 3 },
                 background: 'linear-gradient(45deg, #667eea, #764ba2)',
-                '&:hover': {
-                  background: 'linear-gradient(45deg, #5a6fd8, #6a42a0)',
-                },
+                '&:hover': { background: 'linear-gradient(45deg, #5a6fd8, #6a42a0)' },
+                fontSize: { xs: '0.75rem', sm: '1rem' }
               }}
             >
               Add Student
@@ -294,42 +688,16 @@ const ClassDetails = ({ classId, setView }) => {
         </Dialog>
 
         {/* Delete Class Dialog */}
-        <Dialog
-          open={openDelete}
-          onClose={() => setOpenDelete(false)}
-          maxWidth="xs"
-          fullWidth
-          PaperProps={{ sx: { borderRadius: 4, mx: { xs: 2, sm: 4 } } }}
-        >
-          <DialogTitle sx={{ 
-            fontSize: { xs: '1.25rem', sm: '1.5rem' },
-            fontWeight: 600,
-            color: '#d32f2f',
-          }}>
-            Confirm Delete Class
-          </DialogTitle>
-          <DialogContent>
-            <Typography>
-              Are you sure you want to delete this class? This action cannot be undone and will remove all associated student data and attendance records.
+        <Dialog open={openDelete} onClose={() => setOpenDelete(false)} PaperProps={{ sx: { borderRadius: { xs: 2, sm: 4 } } }}>
+          <DialogTitle sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>Delete Class</DialogTitle>
+          <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Typography sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+              Are you sure you want to delete this class? This action cannot be undone.
             </Typography>
           </DialogContent>
-          <DialogActions sx={{ p: 3 }}>
-            <Button 
-              onClick={() => setOpenDelete(false)}
-              sx={{ textTransform: 'none' }}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleDeleteClass}
-              variant="contained"
-              color="error"
-              sx={{
-                textTransform: 'none',
-                borderRadius: 2,
-                px: 3,
-              }}
-            >
+          <DialogActions sx={{ p: { xs: 2, sm: 3 } }}>
+            <Button onClick={() => setOpenDelete(false)} sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>Cancel</Button>
+            <Button onClick={handleDeleteClass} color="error" variant="contained" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
               Delete
             </Button>
           </DialogActions>
